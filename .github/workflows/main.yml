@@ -1,4 +1,4 @@
-name: Run My Bot Forever2
+name: Run My Bot Forever0
 
 on:
   workflow_dispatch: # تشغيل يدوي
@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable tor xvfb
-          pip install selenium requests
+          pip install selenium requests undetected-chromedriver
 
       - name: Configure and Start Tor
         run: |
@@ -45,7 +45,7 @@ jobs:
       - name: Start Bot
         # استخدام -u يظهر السجل فوراً، و timeout يضمن إعادة التشغيل قبل الـ 6 ساعات
         run: |
-          timeout 350m xvfb-run python -u bot_master2.py || echo "⚠️ انتهت الجلسة، جاري التجهيز للجولة التالية..."
+          timeout 350m xvfb-run python -u botpro16.py || echo "⚠️ انتهت الجلسة، جاري التجهيز للجولة التالية..."
 
       - name: Self-Restart Workflow
         if: always() 
