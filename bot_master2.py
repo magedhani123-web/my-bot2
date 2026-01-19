@@ -37,7 +37,6 @@ DEVICES = [
     {"name": "MacBook Pro (macOS)", "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36", "plat": "MacIntel", "w": 1440, "h": 900, "mobile": False}
 ]
 
-# خريطة اللغات بناءً على كود الدولة (اختصار)
 LANG_MAP = {
     'US': 'en-US,en;q=0.9', 'GB': 'en-GB,en;q=0.9', 'DE': 'de-DE,de;q=0.9',
     'FR': 'fr-FR,fr;q=0.9', 'NL': 'nl-NL,nl;q=0.9', 'CH': 'de-CH,it;q=0.8',
@@ -50,7 +49,7 @@ LANG_MAP = {
 def get_geo_info():
     try:
         proxies = {'http': TOR_PROXY, 'https': TOR_PROXY}
-        response = requests.get('http://ip-api.com/json/', proxies=proxies, timeout=10).json()
+        response = requests.get('http://ip-api.com/json/', proxies=proxies, timeout=15).json()
         if response['status'] == 'success':
             return {
                 "ip": response['query'],
@@ -71,7 +70,8 @@ def rotate_ip():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(("127.0.0.1", CONTROL_PORT))
             s.send(b'AUTHENTICATE ""\r\nSIGNAL NEWNYM\r\nQUIT\r\n')
-        time.sleep(3)
+        # زدنا وقت انتظار استقرار الدائرة الجديدة لـ Tor
+        time.sleep(10) 
         return get_geo_info()
     except:
         return get_geo_info()
@@ -86,12 +86,10 @@ def create_browser(device, geo):
     options = Options()
     options.binary_location = chrome_bin
     
-    # 1. إعدادات اللغة (بناءً على الدولة)
     user_lang = LANG_MAP.get(geo['country'], 'en-US,en;q=0.9')
     options.add_argument(f'--lang={geo["country"].lower()}')
     options.add_experimental_option('prefs', {'intl.accept_languages': user_lang})
     
-    # 2. إعدادات أساسية
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--headless=new')
@@ -100,7 +98,6 @@ def create_browser(device, geo):
     options.add_argument(f'--user-agent={device["ua"]}')
     options.add_argument(f'--user-data-dir={profile_dir}')
     
-    # 3. محاكاة الجوال (Viewport & Mobile)
     if device['mobile']:
         mobile_emulation = {
             "deviceMetrics": {"width": device['w'], "height": device['h'], "pixelRatio": 3.0},
@@ -110,19 +107,16 @@ def create_browser(device, geo):
     else:
         options.add_argument(f'--window-size={device["w"]},{device["h"]}')
 
-    # تخفي إضافي
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     
     driver = webdriver.Chrome(options=options)
     
-    # 4. 🔥 السحر: ضبط المنطقة الزمنية (Timezone) يدوياً عبر الـ Driver
     try:
         driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": geo['timezone']})
     except:
         pass
 
-    # 5. ضبط الـ Platform ليتطابق مع الجهاز
     driver.execute_script(f"Object.defineProperty(navigator, 'platform', {{get: () => '{device['plat']}'}});")
     
     return driver, profile_dir
@@ -133,11 +127,9 @@ def create_browser(device, geo):
 def run_session(session_id):
     print(f"\n🚀 Session {session_id} Started")
     
-    # تدوير IP وجلب معلومات الدولة
     geo = rotate_ip()
     print(f"🌍 IP: {geo['ip']} | 📍 {geo['city']}, {geo['country']} | 🕒 {geo['timezone']}")
     
-    # اختيار جهاز عشوائي من القائمة المطلوبة
     device = random.choice(DEVICES)
     print(f"📱 Device: {device['name']}")
     
@@ -145,15 +137,22 @@ def run_session(session_id):
     try:
         driver, profile = create_browser(device, geo)
         
-        # اختيار فيديو عشوائي (استخدم فيديوهاتك هنا)
         video_id = random.choice(["6hYLIDz-RRM", "bmgpC4lGSuQ", "AvH9Ig3A0Qo"])
         driver.get(f"https://www.youtube.com/watch?v={video_id}")
         
-        # الانتظار والمشاهدة (تسريع 2x كما في السكربت السابق)
-        time.sleep(10)
-        driver.execute_script("document.querySelector('video').playbackRate = 2.0; document.querySelector('video').play();")
+        # 🔥 التعديل الأهم: زدنا وقت الانتظار من 10 إلى 25 ثانية
+        # لضمان تحميل مشغل الفيديو بالكامل عبر Tor قبل تنفيذ الأوامر
+        time.sleep(25)
         
-        wait_time = random.randint(100, 200)
+        # استخدام try داخلي لضمان عدم توقف السكربت إذا لم يجد الفيديو فوراً
+        try:
+            driver.execute_script("document.querySelector('video').playbackRate = 2.0; document.querySelector('video').play();")
+        except:
+            print("⚠️ Player not ready yet, waiting 10s more...")
+            time.sleep(10)
+            driver.execute_script("document.querySelector('video').playbackRate = 2.0; document.querySelector('video').play();")
+        
+        wait_time = random.randint(150, 250)
         print(f"🎬 Watching for {wait_time}s at 2x speed...")
         time.sleep(wait_time)
         
@@ -167,9 +166,14 @@ def run_session(session_id):
 
 if __name__ == "__main__":
     count = 1
+    # تأكد من تشغيل Tor في البداية
+    os.system("sudo service tor start > /dev/null 2>&1")
+    time.sleep(5) 
+    
     while True:
         run_session(count)
         count += 1
-        sleep_gap = random.randint(15, 30)
+        # زدنا وقت الراحة بين الجلسات لتجنب كشف النشاط المتكرر
+        sleep_gap = random.randint(20, 45)
         print(f"💤 Sleeping for {sleep_gap}s...")
         time.sleep(sleep_gap)
